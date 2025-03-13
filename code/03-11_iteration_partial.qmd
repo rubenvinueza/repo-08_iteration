@@ -180,6 +180,36 @@ Let's apply it to one of the vegetation indices
 meancv(nematode_w$rndvi)
 ```
 
+```{r}
+ggplot(data = nematode_w,
+       aes(x = sampleid, y = mel_s)
+       ) +
+  geom_point()
+```
+
+```{r}
+meancv2 <- function(df,col) {
+  # Calculate intermediary steps of mean and sd
+  mean <- mean({{df}}%>% pull({{col}}), na.rm = T)
+  sd <- sd({{df}}%>%pull({{col}}), na.rm = T)
+  # Calculate cv
+  cv <- (sd/mean)*100
+  # Combine them into a data frame
+  df <- data.frame(mean = mean,
+                   cv = cv
+                   )
+  # Return the data frame
+  df
+}
+
+
+meancv2
+```
+
+```{r}
+meancv2(df = nematode_w,
+        col = rndvi)
+```
 # 5) Loops  
 Different types of loops exist, with `for` and `while` loops being the most popular.  
 
@@ -221,11 +251,16 @@ for (i in 3: ncol(nematode_w)) {
   # Defining the name of the variable being analyzed in a given loop step
   varname <- colnames[i]
   # Calculating mean and cv
-
+  statsum <- meancv(nematode_w[[i]])
   # Appending results to the empty data frame  
-
+  nematode_meancv$variable[[i-2]] <- varname 
+  nematode_meancv$mean[[i-2]] <- round(statsum$mean,3)
+  nematode_meancv$cv[[i-2]] <- round(statsum$cv,3)
+  
   # Print a message
+  print(paste("Finished with variable", varname))
 }
+
 ```
 
 Let's inspect `nematode_meancv`  
@@ -253,17 +288,31 @@ This approach creates a bit of a brain-twist, since we are creating data sets (a
 
 
 ```{r}
-nematode_mods 
+nematode_mods <- nematode_w %>%
   # Pivotting longer for the response variables
-
+  pivot_longer(cols = mel_s:eggs_r,
+             names_to = "resp_var",
+             values_to = "resp_val"
+             ) %>%
   # Pivotting longer for the explanatory variables  
-
+  pivot_longer(cols = b:nli,
+             names_to = "exp_var",
+             values_to = "exp_val"
+             ) %>%
   # Creating groups of resp_var and exp_var
-
+  group_by(resp_var, exp_var) %>%
+  nest() %>%
   # Applying linear model to each element
-
+  mutate(lm = map(data,
+                  ~lm(data = .x,
+                      formula = resp_val ~ exp_val
+                      )
+                  )) %>%
   # Extracting R2 for each element  
-
+  mutate(r2 = map(lm, 
+                  ~ summary(.x)$r.squared
+                  ))
+nematode_mods
 
 ```
 Above we used the `map()` function because we only had one iterating element (i.e., data).  
@@ -271,7 +320,11 @@ Above we used the `map()` function because we only had one iterating element (i.
 Now, let's unnest the r2 values, then only keep the largest r2 for each response variable, and make some plots.  
 
 ```{r}
-nematode_mods_sel 
+nematode_mods_sel <- nematode_mods%>%
+  unnest(r2) %>%
+  arrange(r2) %>%
+  group_by(resp_var) %>%
+  filter(r2 == max(r2))
 
 
 nematode_mods_sel
@@ -279,11 +332,38 @@ nematode_mods_sel
 
 
 ```{r}
-nematode_mods_sel_plots 
+nematode_mods_sel_plots  <- nematode_mods_sel %>%
   # Making scatterplots with r2 in subtitle
+  mutate(splot = map2(data, r2,
+                      
+                     ~ggplot(data = .x,
+                             aes(x= exp_val,
+                                 y = resp_val)
+                             ) +
+                       geom_point() +
+                       geom_smooth(method = "lm") +
+                       labs(subtitle = paste("R2:", .y))
+                     )) %>%
 
   # Making scatterplots with r2 in subtitle, and correct x and y axis titles  
-
+mutate(splot_better = pmap(list(.df = data,
+                                .r2 = r2,
+                                .rv = resp_var,
+                                .ev = exp_var
+                                ),
+                           function(.df, .r2, .rv, .ev)
+                             ggplot(data = .df,
+                             aes(x= exp_val,
+                                 y = resp_val)
+                             ) +
+                       geom_point() +
+                       geom_smooth(method = "lm") +
+                       labs(subtitle = paste("R2:", .r2),
+                            x = .ev,
+                            y = .rv
+                            )
+                           ))
+nematode_mods_sel_plots$splot_better[1]
 
 ```
 Now, we had 2 iterating elements to create `splot`, so we needed to use `map2()`.  
@@ -292,6 +372,7 @@ Also, with more than 2 iterating elements to create `splot_better`, we used the 
 
 Let's print the first plot:
 ```{r}
+nematode_mods_sel_plots$splot_better[1]
 
 ```
 
@@ -299,7 +380,7 @@ Now, let's print all of the plots
 ```{r}
 #| warning: false
 #| message: false
-
+nematode_mods_sel_plots$splot_better[]
 
 ```
 
@@ -307,10 +388,15 @@ Finally, let's save all these plots as one figure.
 ```{r}
 library(gridExtra)
 
-allplots 
+allplots <- marrangeGrob(nematode_mods_sel_plots$splot_better,
+                         nrow = 4,
+                         ncol = 4
+                         )
 
 allplots
 
+ggsave(plot = allplots,
+       "../output/allplots.png")
 
 ```
 
