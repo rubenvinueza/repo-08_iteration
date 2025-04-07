@@ -406,7 +406,8 @@ In this exercise, we:
   - created two functions to simplify creating ndvi and cv  
   - iterated through the calculation of mean and cv using a `for` loop  
   - iterated through 150 sets of data to create 150 models using `map`  
-  - selected best models, plotted (using `map2()` and `pmap()`), and exported to file  
+  - selected best models, plotted (using `map2()` and `pmap()`), and exported to file
+  
 
   
 

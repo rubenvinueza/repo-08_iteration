@@ -1,0 +1,183 @@
+---
+title: "Assignment 8 - Iteration"
+author: "Ruben Vinueza"  
+format:
+  html:
+    code-fold: true 
+    embed-resources: true
+    toc: true
+    number-sections: true
+    theme: cerulean
+---
+
+# Goal of this assignment
+
+The goal of this assignment is for you to **apply different iteration concepts** learned in class to a new data set.
+
+In specific, you will be asked to:\
+- create a function to automate plot creation\
+- apply this function to different parts of a dataset through the use of the map function.
+
+# Instructions
+
+-   Move this script into the `code` subfolder of your `08_iteration` project\
+-   On this script, fill your name under the `title` section of the YAML\
+-   On this script, you will be asked to:
+    -   Import the raw soybeans data set used in the `02_wrangling` project\
+    -   Create a function to automate the creation of boxplots\
+    -   Create a map workflow to apply your function to different locations in the data set
+
+# Code
+
+Hereafter is where you will develop your code.\
+Remember to load any necessary packages and the data.
+
+```{r setup}
+#| message: false
+#| warning: false
+
+# Loading packages
+library(readxl)
+library(tidyverse) # for data wrangling and plotting
+library(janitor) # clean column names
+library(knitr) # for figure displaying
+library(ggplot2) # for ggplot
+library(purrr) # for mapping
+```
+
+Reading data.
+
+```{r}
+soyk <- read_excel("../data/01_soybeans.xlsx")
+
+soyk
+```
+
+# 2) EDA
+
+```{r summary}
+summary(soyk)
+```
+
+```{r soyk_1}
+soyk_1 <- clean_names(soyk)
+
+soyk_1
+```
+
+```{r soyk_3 }
+# Transforming K rate from lbs/ac to kg/ha
+soyk_3 <- mutate(soyk_1,
+                  k_rate_kgha = k_rate_lbac*0.454/0.405,
+                  k_rate_kgha = round(k_rate_kgha, 0)
+                  )
+
+soyk_3
+```
+
+```{r soyk_4}
+soyk_4 <- mutate(soyk_3,
+                 rep= case_when(
+                   plot > 100 & plot < 200 ~ 1,
+                   plot > 200 & plot < 300 ~ 2, 
+                   plot > 300 & plot < 400 ~ 3,
+                   plot > 400 ~ 4
+                   
+                 )
+                 )
+
+soyk_4
+```
+
+```{r soyk_5 - pivot_longer()}
+soyk_5 <- pivot_longer(soyk_4,
+                       names_to = "location.k",
+                       values_to = "k_pct",
+                       cols = contains("k_pct")
+                       )
+
+soyk_5
+```
+
+```{r soyk_6 - separate()}
+soyk_w <- separate (soyk_5,
+                    location.k,
+                    into= c("location", "k", "pct")
+                    )
+
+soyk_w
+```
+
+## Q1 - Create a function
+
+Here, you are asked to create a function.\
+The goal of this function is to create a boxplot of K leaf concentration as a function of K rates.\
+Name the function `myplot`.\
+The function inputs are:\
+- df: the data set containing the columns needed for plotting\
+- x: the column name inside df to be plotted on the x axis\
+- y: the column name inside df to be plotted on the y axis\
+Once you create the function, make sure it works by applying it to one of the locations where K leaf concentration was collected.
+
+```{r k leaf concentration function, warning=FALSE}
+
+myplot <- function(df, x, y, location) {
+  ggplot(data = df, aes_string(x = x, y = y, fill = "location")) +
+    geom_boxplot(width = 0.6, alpha = 0.7) +
+    geom_jitter(width = 0.2, alpha = 0.5, color = "black") +
+    labs(title = paste("K Leaf Concentration as a function of K Rate -", location),
+         x = "K Rate (kg/ha)", 
+         y = "Leaf Concentration", 
+         fill = "Location")
+}
+
+#Checking that funtion works for 1 location
+
+tifton_data <- filter(soyk_w, location == "tifton")
+myplot(tifton_data, "k_rate_kgha", "k_pct", "tifton")
+```
+
+## Q2 - Iterate over locations
+
+On the step above you created a function to create boxplot for one location (one column in your original data set).
+
+Now, you are asked to apply this function to each location in the data set.\
+For that, use one of the functions in the `map` family from the purr package.\
+When making your plots, make sure to add a title to represent which location is represented in each plot.
+
+```{r mapping}
+locations <- unique(soyk_w$location)
+allplots <- map(locations, function(loc) {
+  location_data <- filter(soyk_w, location == loc)
+  myplot(location_data, "k_rate_kgha", "k_pct", loc)
+}) 
+```
+
+# Display the plots
+
+```{r}
+allplots
+```
+
+# Submitting your work
+
+Once you have developed all the code and answers, make sure to Render this quarto file.
+
+**Notes on rendering**:
+
+-   Make sure to render your work and inspect how the final html look like.\
+-   If it does not look professional for whatever reason, then fix the issue, re-render it, recheck.\
+-   Only send me your work once your html file looks professional.
+    -   **DO NOT** delete the file's heading levels (# and ##). They set up the proper heading 1 and 2 levels, and I use them to guide my grading.\
+
+    -   If a given chunk is also outputting warnings or messages, inhibit this behavior by changing the chunk options `message` and `warning` to `FALSE` (I'll demo this in a moment).
+
+    -   If, after rendered, 2 lines of text are connected and you wish to "break line" between them, add 2 extra spaces after the first one (I'lld demo this in a moment).
+
+After rendering, an .html file will be created on your `code` folder.
+
+Rename this file to `Assignment-08-iteration-LASTNAME.html`.
+
+For ex., mine would be `Assignment-08-iteration-Bastos.html`.
+
+Submit your work by uploading the **html** file to **eLC Assignment #8 - Iteration** by Mar 18 11:59 pm.
